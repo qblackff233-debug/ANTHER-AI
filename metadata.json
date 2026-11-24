@@ -1,0 +1,6 @@
+{
+  "name": "Aether AI",
+  "description": "Personal AI agent app with 7 specialized modes, animated thinking steps, voice input/output, and cloud-synced chat history.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

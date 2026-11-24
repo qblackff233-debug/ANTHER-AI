@@ -1,0 +1,163 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidAgentMode(mode) {
+      return mode in [
+        'GENERAL_ASSISTANT',
+        'CODER',
+        'CONTENT_WRITER',
+        'STUDY_TUTOR',
+        'CREATIVE_STORYTELLER',
+        'DATA_ANALYST',
+        'LANGUAGE_TRANSLATOR'
+      ];
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.displayName is string &&
+             data.displayName.size() <= 100 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 150)) &&
+             (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+             isValidAgentMode(data.preferredMode) &&
+             data.hinglishPreferred is bool &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidConversation(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.title is string &&
+             data.title.size() >= 1 &&
+             data.title.size() <= 120 &&
+             isValidAgentMode(data.agentMode) &&
+             data.lastMessagePreview is string &&
+             data.lastMessagePreview.size() <= 200 &&
+             data.messageCount is int &&
+             data.messageCount >= 0 &&
+             data.messageCount <= 5000 &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidChatMessage(data, userId, conversationId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.conversationId is string &&
+             data.conversationId == conversationId &&
+             data.role in ['user', 'model'] &&
+             data.text is string &&
+             data.text.size() <= 32000 &&
+             isValidAgentMode(data.agentMode) &&
+             data.thinkingSteps is list &&
+             data.thinkingSteps.size() <= 10 &&
+             (data.thinkingSteps.size() == 0 || data.thinkingSteps[0] is string) &&
+             data.followUpSuggestions is list &&
+             data.followUpSuggestions.size() <= 6 &&
+             (data.followUpSuggestions.size() == 0 || data.followUpSuggestions[0] is string) &&
+             (!('attachmentLabel' in data) || (data.attachmentLabel is string && data.attachmentLabel.size() <= 200)) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'preferredMode', 'hinglishPreferred', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'photoUrl', 'preferredMode', 'hinglishPreferred', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'photoUrl', 'preferredMode', 'hinglishPreferred', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /conversations/{conversationId} {
+        allow get: if isOwner(userId) && isValidId(conversationId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(conversationId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'agentMode', 'lastMessagePreview', 'messageCount', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'agentMode', 'lastMessagePreview', 'messageCount', 'createdAt', 'updatedAt']) &&
+                         isValidConversation(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(conversationId) &&
+                         isValidConversation(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'agentMode', 'lastMessagePreview', 'messageCount', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(conversationId);
+
+        match /messages/{messageId} {
+          allow get: if isOwner(userId) && isValidId(conversationId) && isValidId(messageId);
+          allow list: if isOwner(userId) && isValidId(conversationId);
+
+          allow create: if isOwner(userId) &&
+                           isValidId(conversationId) &&
+                           isValidId(messageId) &&
+                           incoming().keys().hasAll(['userId', 'conversationId', 'role', 'text', 'agentMode', 'thinkingSteps', 'followUpSuggestions', 'createdAt']) &&
+                           incoming().keys().hasOnly(['userId', 'conversationId', 'role', 'text', 'agentMode', 'thinkingSteps', 'followUpSuggestions', 'attachmentLabel', 'createdAt']) &&
+                           isValidChatMessage(incoming(), userId, conversationId) &&
+                           existsAfter(/databases/$(database)/documents/users/$(userId)/conversations/$(conversationId));
+
+          allow update: if isOwner(userId) &&
+                           isValidId(conversationId) &&
+                           isValidId(messageId) &&
+                           isValidChatMessage(incoming(), userId, conversationId) &&
+                           incoming().userId == existing().userId &&
+                           incoming().conversationId == existing().conversationId &&
+                           incoming().role == existing().role &&
+                           incoming().createdAt == existing().createdAt &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['text', 'agentMode', 'thinkingSteps', 'followUpSuggestions']);
+
+          allow delete: if isOwner(userId) && isValidId(conversationId) && isValidId(messageId);
+        }
+      }
+    }
+  }
+}

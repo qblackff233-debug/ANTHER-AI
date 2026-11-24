@@ -1,0 +1,171 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user preferences and profile metadata stored under their UID.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name from Google account."
+        },
+        "email": {
+          "type": "string",
+          "description": "Optional email address of the user."
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Optional profile avatar URL."
+        },
+        "preferredMode": {
+          "type": "string",
+          "description": "Active or default AgentMode enum key.",
+          "enum": [
+            "GENERAL_ASSISTANT",
+            "CODER",
+            "CONTENT_WRITER",
+            "STUDY_TUTOR",
+            "CREATIVE_STORYTELLER",
+            "DATA_ANALYST",
+            "LANGUAGE_TRANSLATOR"
+          ]
+        },
+        "hinglishPreferred": {
+          "type": "boolean",
+          "description": "Whether quick Hinglish/Hindi bilingual preference is toggled on."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when profile was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "displayName", "preferredMode", "hinglishPreferred", "createdAt", "updatedAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A saved AI chat thread owned by an authenticated user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "title": {
+          "type": "string",
+          "description": "Conversation title derived from the first user message."
+        },
+        "agentMode": {
+          "type": "string",
+          "description": "AgentMode enum key used in the conversation.",
+          "enum": [
+            "GENERAL_ASSISTANT",
+            "CODER",
+            "CONTENT_WRITER",
+            "STUDY_TUTOR",
+            "CREATIVE_STORYTELLER",
+            "DATA_ANALYST",
+            "LANGUAGE_TRANSLATOR"
+          ]
+        },
+        "lastMessagePreview": {
+          "type": "string",
+          "description": "Short preview snippet of the latest message."
+        },
+        "messageCount": {
+          "type": "integer",
+          "description": "Number of messages in the conversation."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when conversation was created (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when conversation was last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "title", "agentMode", "lastMessagePreview", "messageCount", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "An individual user or AI model message within a conversation.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID."
+        },
+        "conversationId": {
+          "type": "string",
+          "description": "Parent conversation document ID."
+        },
+        "role": {
+          "type": "string",
+          "description": "Message author role.",
+          "enum": ["user", "model"]
+        },
+        "text": {
+          "type": "string",
+          "description": "Markdown message body."
+        },
+        "agentMode": {
+          "type": "string",
+          "description": "AgentMode enum key active for this message.",
+          "enum": [
+            "GENERAL_ASSISTANT",
+            "CODER",
+            "CONTENT_WRITER",
+            "STUDY_TUTOR",
+            "CREATIVE_STORYTELLER",
+            "DATA_ANALYST",
+            "LANGUAGE_TRANSLATOR"
+          ]
+        },
+        "thinkingSteps": {
+          "type": "string",
+          "description": "Bounded list of agent thinking phase strings."
+        },
+        "followUpSuggestions": {
+          "type": "string",
+          "description": "Bounded list of clickable follow-up prompt suggestions."
+        },
+        "attachmentLabel": {
+          "type": "string",
+          "description": "Optional attachment filename or photo label."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when message was created (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": ["userId", "conversationId", "role", "text", "agentMode", "thinkingSteps", "followUpSuggestions", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile and preferences scoped to the authenticated user."
+    },
+    "/users/{userId}/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/Conversation" },
+      "description": "Saved conversation threads owned by the authenticated user."
+    },
+    "/users/{userId}/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Chronological chat messages inside a user conversation."
+    }
+  }
+}
